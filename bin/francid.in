@@ -691,6 +691,23 @@ sub ShowBoot {
     return(0);
 }
 
+# This routine parses "show media"
+sub ShowMedia {
+    my($slot);
+
+    print STDERR "    In ShowMedia: $_" if ($debug);
+
+    while (<INPUT>) {
+        tr/\015//d;
+        next if /^\s*$/;
+        last if (/^$prompt/);
+
+        ProcessHistory("MEDIA","","","!$_");
+    }
+    ProcessHistory("MEDIA","","","!\n");
+    return(0);
+}
+
 # This routine parses "show flash"
 sub ShowFlash {
     # skip if this is 7000, 7200, 7500, or 12000; else we end up with
@@ -723,6 +740,47 @@ sub ShowFlash {
     }
     ProcessHistory("","","","!\n");
     return;
+}
+
+# This routine parses "show chassis"
+sub ShowChassis {
+    my($skip) = 0;
+
+    print STDERR "    In ShowChassis: $_" if ($debug);
+
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/ from /);
+	next if (/current temperature/i);
+	return(1) if (/^\s+\^$/);		# edgeiron invalid command
+
+	if (/^---/ || /^$/) { # next section reached
+	    $skip = 0;
+	}
+	if (/(POWERS|TEMPERATURE READINGS)/) {
+	    $skip = 1;
+	}
+	if (/fan controlled temperature:/i ||
+	    /fan speed switching temperature thresholds/i) {
+	    $skip = 1;
+	}
+	if (/THERMAL PLANE/) {
+	    $skip = 1;
+	}
+	if (/temperature:/i) {
+	    $skip = 1;
+	}
+	s/(Fan \d+ \S+), speed .*/$1/;
+	if (/speed/i) {
+	    $skip = 1;
+	}
+	next if $skip;
+
+	ProcessHistory("CHASSIS","","","! $_");
+    }
+    ProcessHistory("CHASSIS","","","!\n");
+    return(0);
 }
 
 # This routine parses "dir /all ((disk|slot)N|bootflash|nvram):"
@@ -2270,7 +2328,9 @@ sub DoNothing {print STDOUT;}
 	{'show boot'			=> 'ShowBoot'},
 	{'show bootvar'			=> 'ShowBoot'},
 	{'show variables boot'		=> 'ShowBoot'},
-#	{'show flash'			=> 'ShowFlash'},
+	{'show media'			=> 'ShowMedia'},
+	{'show chassis'			=> 'ShowChassis'},
+	{'show flash'			=> 'ShowFlash'},
 	{'dir /all nvram:'		=> 'DirSlotN'},
 	{'dir /all bootflash:'		=> 'DirSlotN'},
 	{'dir /all slot0:'		=> 'DirSlotN'},
