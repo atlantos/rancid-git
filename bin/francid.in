@@ -2270,7 +2270,7 @@ sub DoNothing {print STDOUT;}
 	{'show boot'			=> 'ShowBoot'},
 	{'show bootvar'			=> 'ShowBoot'},
 	{'show variables boot'		=> 'ShowBoot'},
-	{'show flash'			=> 'ShowFlash'},
+#	{'show flash'			=> 'ShowFlash'},
 	{'dir /all nvram:'		=> 'DirSlotN'},
 	{'dir /all bootflash:'		=> 'DirSlotN'},
 	{'dir /all slot0:'		=> 'DirSlotN'},
