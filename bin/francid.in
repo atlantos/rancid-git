@@ -506,29 +506,6 @@ sub ShowIDprom {
     return(0);
 }
 
-# This routine parses "show install active"
-sub ShowInstallActive {
-    print STDERR "    In ShowInstallActive: $_" if ($debug);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if (/^\s*\^\s*$/);
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	ProcessHistory("COMMENTS","keysort","F5","!Image: $_") && next;
-    }
-    return(0);
-}
-
 # This routine parses "show env all"
 sub ShowEnv {
     # Skip if this is not a 7500, 7200, or 7000.
@@ -651,46 +628,6 @@ sub ShowGSR {
     return(0);
 }
 
-# This routine parses "show boot"
-sub ShowBoot {
-    # Pick up boot variables if 7000/7200/7500/12000/2900/3500;
-    # otherwise pick up bootflash.
-    print STDERR "    In ShowBoot: $_" if ($debug);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if (/^\s*\^\s*$/);
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(1) if (/Ambiguous command/i);
-	return(1) if (/(Open device \S+ failed|Error opening \S+:)/);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	next if /CONFGEN variable/;
-	if (!defined($H0)) {
-	    $H0 = 1; ProcessHistory("COMMENTS","keysort","H0","!\n");
-	}
-	if ($type !~ /^(12[04]|7)/) {
-	    if ($type !~ /^(29|35)00/) {
-		ProcessHistory("COMMENTS","keysort","H2","!BootFlash: $_");
-	    } else {
-		ProcessHistory("COMMENTS","keysort","H1","!Variable: $_");
-	    }
-	} elsif (/(variable|register)/) {
-	    ProcessHistory("COMMENTS","keysort","H1","!Variable: $_");
-	}
-    }
-    ProcessHistory("COMMENTS","","","!\n");
-    return(0);
-}
-
 # This routine parses "show media"
 sub ShowMedia {
     my($slot);
@@ -782,72 +719,6 @@ sub ShowChassis {
 	ProcessHistory("CHASSIS","","","! $_");
     }
     ProcessHistory("CHASSIS","","","!\n");
-    return(0);
-}
-
-# This routine parses "dir /all ((disk|slot)N|bootflash|nvram):"
-sub DirSlotN {
-    print STDERR "    In DirSlotN: $_" if ($debug);
-
-    my($dev) = (/\s([^\s]+):/);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(1) if (/(No such device|Error Sending Request)/i);
-	return(1) if (/\%Error: No such file or directory/);
-	return(1) if (/No space information available/);
-	# Corrupt flash
-	/\%Error calling getdents / &&
-	    ProcessHistory("FLASH","","","!Flash: $dev: $_") && next;
-	return(-1) if (/\%Error calling/);
-	return(-1) if (/(: device being squeezed|ATA_Status time out)/i); # busy
-	return(-1) if (/\%Error opening \S+:\S+ \(Device or resource busy\)/i);
-	return(-1) if (/command authorization failed/i);
-	return(1) if (/(Open device \S+ failed|Error opening \S+:)/);
-	# skip dir sup-bootflash if dir sup-bootdisk was successful, duplicates
-	if ($cmd =~ / sup-bootdisk/) {
-	    $supbootdisk++;
-	} elsif ($supbootdisk && $cmd =~ / sup-bootflash/) {
-	    return(0);
-	}
-	# filter frequently changing files from IOX bootflash
-	if ($dev =~ /bootflash/) {
-	    next if (/temp_cont\s*$/);
-	    next if (/uptime_cont\s*$/);
-	}
-	# Filter dhcp database
-	next if (/dhcp_[^. ]*\.txt/);
-
-	if ($ios eq "XE" && /.*\((\d+) bytes free\)/) {
-	    my($tmp) = $1;
-	    if ($tmp >= (1024 * 1024 * 1024)) {
-		$tmp = int($tmp / (1024 * 1024 * 1024));
-		s/$1 bytes free/$tmp GB free/;
-	    } else {
-		$tmp = int($tmp / (1024 * 1024));
-		s/$1 bytes free/$tmp MB free/;
-	    }
-	}
-	if ($ios eq "XE" && /^((\s+)?\d+\s+\S+)\s+\d+.*(tracelogs$)/) {
-	    $_ = "$1" . sprintf("%43s", "") . "$3\n";
-	}
-	if ($ios eq "IOS" && /^((\s+)?\d+\s+\S+)\s+\d+.*(sflog$)/) {
-	    $_ = "$1" . sprintf("%43s", "") . "$3\n";
-	}
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	ProcessHistory("FLASH","","","!Flash: $dev: $_");
-    }
-    ProcessHistory("","","","!\n");
     return(0);
 }
 
@@ -1440,52 +1311,6 @@ PerlSucks:
     return(0);
 }
 
-# This routine parses "show inventory".
-sub ShowInventory {
-    print STDERR "    In ShowInventory: $_" if ($debug);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	return if (/^\s*\^$/);
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	if (/^(NAME: "[^"]*",) (DESCR: "[^"]+")/) {
-	    ProcessHistory("INVENTORY","","", sprintf("!%-30s %s\n", $1, $2));
-	    next;
-	}
-	# split PID/VID/SN line
-	if (/^PID: (\S*)\s*,\s*VID: (\S*)\s*,\s*SN: (\S*)\s*$/) {
-	    my($pid,$vid,$sn) = ($1, $2, $3);
-	    my($entries) = "";
-	    # filter <empty>, "0x" and "N/A" lines
-	    if ($pid !~ /^(|0x|N\/A)$/) {
-		$entries .= "!PID: $pid\n";
-	    }
-	    if ($vid !~ /^(|0x|N\/A)$/) {
-		$entries .= "!VID: $vid\n";
-	    }
-	    if ($sn !~ /^(|0x|N\/A)$/) {
-		$entries .= "!SN: $sn\n";
-	    }
-	    ProcessHistory("INVENTORY","","", "$entries");
-	    next;
-	}
-	ProcessHistory("INVENTORY","","","!$_");
-    }
-    ProcessHistory("INVENTORY","","","!\n");
-
-    return(0);
-}
-
 # This routine parses "show module".
 sub ShowModule {
     print STDERR "    In ShowModule: $_" if ($debug);
@@ -1539,25 +1364,6 @@ sub ShowModule {
     return(0);
 }
 
-# This routine parses "show spe version".
-sub ShowSpeVersion {
-    print STDERR "    In ShowSpeVersion: $_" if ($debug);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(-1) if (/command authorization failed/i);
-
-	ProcessHistory("MODEM","","","!Modem: $_") && next;
-    }
-    ProcessHistory("MODEM","","","!\n");
-    return(0);
-}
-
 # This routine parses "show c7200" for the 7200
 # This will create arrays for hw info.
 sub ShowC7200 {
@@ -1606,67 +1412,6 @@ sub ShowC7200 {
 	    next;
 	}
     }
-    return(0);
-}
-
-# This routine parses "show capture".  Intended for ASA/PIXes.
-sub ShowCapture {
-    print STDERR "    In ShowCapture: $_" if ($debug);
-    my $capture_found = 0;
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	return(1) if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	if (/capture (.*) type/) {
-	    my $cap_name = $1;
-	    s/\d+ bytes/<COUNTER> bytes/;
-	    ProcessHistory("CAPTURE","","","!Capture: $cap_name\n");
-	    ProcessHistory("CAPTURE","","","!Capture: $_");
-	} else {
-	    ProcessHistory("CAPTURE","","","!Capture: $_");
-	}
-        $capture_found = 1
-    }
-    ProcessHistory("CAPTURE","","","!\n") if ($capture_found == 1);
-    return(0);
-}
-
-# This routine parses "show vtp status"
-sub ShowVTP {
-    print STDERR "    In ShowVTP: $_" if ($debug);
-
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	#return(1) if ($type !~ /^(2900XL|3500XL|6000)$/);
-	return(-1) if (/command authorization failed/i);
-	next if (/^Configuration last modified by/);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	if (/^VTP Operating Mode\s+:\s+(Transparent|Server)/) {
-	    $DO_SHOW_VLAN = 1;
-	}
-	ProcessHistory("COMMENTS","keysort","I0","!VTP: $_");
-    }
-    ProcessHistory("COMMENTS","keysort","I0","!\n");
     return(0);
 }
 
@@ -1924,31 +1669,6 @@ sub ShowCert {
 		ProcessHistory("CERT","","","!\n");
 	}
 	return(0);
-}
-
-# This routine processes a "show shun".  Intended for ASA/PIXes.
-sub ShowShun {
-    print STDERR "    In ShowShun: $_" if ($debug);
-    my $shun_found = 0;
-    while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	return(1) if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if (/Line has invalid autocommand /);
-	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-
-	ProcessHistory("SHUN","","","!Shun: $_");
-	$shun_found = 1;
-    }
-    ProcessHistory("SHUN","","","!\n") if ($shun_found == 1);
-    return(0);
 }
 
 # This routine processes a "write term"
@@ -2322,60 +2042,21 @@ sub DoNothing {print STDOUT;}
 	{'show version'			=> 'ShowVersion'},
 	{'show redundancy secondary'	=> 'ShowRedundancy'},
 	{'show idprom backplane',	=> 'ShowIDprom'},
-	{'show install active'		=> 'ShowInstallActive'},
 	{'show env all'			=> 'ShowEnv'},
 	{'show rsp chassis-info',	=> 'ShowRSP'},
 	{'show gsr chassis'		=> 'ShowGSR'},
 	{'show diag chassis-info'	=> 'ShowGSR'},
-	{'show boot'			=> 'ShowBoot'},
-	{'show bootvar'			=> 'ShowBoot'},
-	{'show variables boot'		=> 'ShowBoot'},
 	{'show media'			=> 'ShowMedia'},
 	{'show chassis'			=> 'ShowChassis'},
 	{'show flash'			=> 'ShowFlash'},
-	{'dir /all nvram:'		=> 'DirSlotN'},
-	{'dir /all bootflash:'		=> 'DirSlotN'},
-	{'dir /all slot0:'		=> 'DirSlotN'},
-	{'dir /all disk0:'		=> 'DirSlotN'},
-	{'dir /all slot1:'		=> 'DirSlotN'},
-	{'dir /all disk1:'		=> 'DirSlotN'},
-	{'dir /all slot2:'		=> 'DirSlotN'},
-	{'dir /all disk2:'		=> 'DirSlotN'},
-	{'dir /all harddisk:'		=> 'DirSlotN'},
-	{'dir /all harddiska:'		=> 'DirSlotN'},
-	{'dir /all harddiskb:'		=> 'DirSlotN'},
-	{'dir /all sup-bootdisk:'	=> 'DirSlotN'},		# 6500 sup32
-	{'dir /all sup-bootflash:'	=> 'DirSlotN'},		# cat 6500-ios
-	{'dir /all sup-microcode:'	=> 'DirSlotN'},		# cat 6500-ios
-	{'dir /all slavenvram:'		=> 'DirSlotN'},
-	{'dir /all slavebootflash:'	=> 'DirSlotN'},
-	{'dir /all slaveslot0:'		=> 'DirSlotN'},
-	{'dir /all slavedisk0:'		=> 'DirSlotN'},
-	{'dir /all slaveslot1:'		=> 'DirSlotN'},
-	{'dir /all slavedisk1:'		=> 'DirSlotN'},
-	{'dir /all slaveslot2:'		=> 'DirSlotN'},
-	{'dir /all slavedisk2:'		=> 'DirSlotN'},
-	{'dir /all slavesup-bootflash:'	=> 'DirSlotN'},		# cat 7609
-	{'dir /all sec-nvram:'		=> 'DirSlotN'},
-	{'dir /all sec-bootflash:'	=> 'DirSlotN'},
-	{'dir /all sec-slot0:'		=> 'DirSlotN'},
-	{'dir /all sec-disk0:'		=> 'DirSlotN'},
-	{'dir /all sec-slot1:'		=> 'DirSlotN'},
-	{'dir /all sec-disk1:'		=> 'DirSlotN'},
-	{'dir /all sec-slot2:'		=> 'DirSlotN'},
-	{'dir /all sec-disk2:'		=> 'DirSlotN'},
 	{'show controllers'		=> 'ShowContAll'},
 	{'show controllers cbus'	=> 'ShowContCbus'},
 	{'show snmp mib ifmib ifindex'  => 'ShowIfIndex'},
 	{'show snmp engineID'           => 'ShowEngineID'},
 	{'show diagbus'			=> 'ShowDiagbus'},
 	{'show diag'			=> 'ShowDiag'},
-	{'show capture'			=> 'ShowCapture'},	# ASA/PIX
 	{'show module'			=> 'ShowModule'},	# cat 6500-ios
-	{'show spe version'		=> 'ShowSpeVersion'},
 	{'show c7200'			=> 'ShowC7200'},
-	{'show inventory raw'		=> 'ShowInventory'},
-	{'show vtp status'		=> 'ShowVTP'},
 	{'show vlan'			=> 'ShowVLAN'},
 	{'show vlan-switch'		=> 'ShowVLAN'},
 	{'show crypto pki certificates' => 'ShowCert'},
@@ -2384,10 +2065,6 @@ sub DoNothing {print STDOUT;}
 	{'show ip interface'		=> 'ShowIPInterface'},
 	{'show ipv6 interface'		=> 'ShowIPv6Interface'},
 	{'show debug'			=> 'ShowDebug'},
-	{'show shun'			=> 'ShowShun'},		# ASA/PIX
-	{'more system:running-config'	=> 'WriteTerm'},	# ASA/PIX
-	{'show running-config view full'=> 'WriteTerm'},	# workaround for
-								# role-based CLI
 	{'show running-config'		=> 'WriteTerm'},
 	{'write term'			=> 'WriteTerm'},
 );
