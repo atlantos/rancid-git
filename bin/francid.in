@@ -217,7 +217,7 @@ sub ShowRedundancy {
     while (<INPUT>) {
         tr/\015//d;
         next if /^\s*$/;
-        last if /^Invalid input/;
+        return(1) if /^Invalid input/;
         last if (/^$prompt/);
 
         ProcessHistory("ShowRedundancy","","","!$_");
@@ -282,40 +282,18 @@ sub ShowFlash {
 
 # This routine parses "show chassis"
 sub ShowChassis {
-    my($skip) = 0;
+    my($slot);
 
     print STDERR "    In ShowChassis: $_" if ($debug);
 
     while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/ from /);
-	next if (/current temperature/i);
-	return(1) if (/^\s+\^$/);		# edgeiron invalid command
+        tr/\015//d;
+        next if /^\s*$/;
+        last if (/^$prompt/);
+	next if (/^(Active Mgmt Module|SFM[0-9]|LP[0-9]+ Sensor[0-9]+):\s+.*[0-9]C\s*$/);
+	next if (/Current temperature|Fan controlled temperature/);
 
-	if (/^---/ || /^$/) { # next section reached
-	    $skip = 0;
-	}
-	if (/(POWERS|TEMPERATURE READINGS)/) {
-	    $skip = 1;
-	}
-	if (/fan controlled temperature:/i ||
-	    /fan speed switching temperature thresholds/i) {
-	    $skip = 1;
-	}
-	if (/THERMAL PLANE/) {
-	    $skip = 1;
-	}
-	if (/temperature:/i) {
-	    $skip = 1;
-	}
-	s/(Fan \d+ \S+), speed .*/$1/;
-	if (/speed/i) {
-	    $skip = 1;
-	}
-	next if $skip;
-
-	ProcessHistory("CHASSIS","","","! $_");
+        ProcessHistory("CHASSIS","","","!$_");
     }
     ProcessHistory("CHASSIS","","","!\n");
     return(0);
@@ -328,21 +306,13 @@ sub ShowEngineID {
 	while (<INPUT>) {
 		tr/\015//d;
 		last if (/^$prompt/);
-		next if (/^(\s*|\s*$cmd\s*)$/);
-		return(1) if (/(Invalid (input|command) detected|Type help or )/i);
-		return(-1) if (/command authorization failed/i);
-		# the pager can not be disabled per-session on the PIX
-		if (/^(<-+ More -+>)/) {
-			my($len) = length($1);
-			s/^$1\s{$len}//;
-		}
-		if (/Local\sSNMP\sengineID:\s(.+)$/) {
-			unless ($EngineId) { ProcessHistory("ENGINEID","","","!\n"); }
-			ProcessHistory("ENGINEID","","","!SNMP engineID: $1\n");
-			$EngineId++;
-			next;
-		}
+		next if /^\s*$/;
+		return(1) if /^Invalid input/; 
+		next if /Engine time/;
+
+		ProcessHistory("ENGINEID","","","!$_");
 	}
+	ProcessHistory("ENGINEID","","","!\n");
 	return(0);
 }
 
@@ -375,56 +345,21 @@ sub ShowDebug {
     return(0);
 }
 
-# This routine parses "show module".
+# This routine parses "show module"
 sub ShowModule {
     print STDERR "    In ShowModule: $_" if ($debug);
 
-    my(@lines);
-    my($slot, $pa);
-
     while (<INPUT>) {
 	tr/\015//d;
-	return if (/^\s*\^$/);
-	last if (/online diag status/i);
 	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
+	return(1) if (/Invalid input/);
+	return(1) if (/^\s+\^$/);		# edgeiron invalid command
+	next if (/^\s*$/);
+	next if (/:\s*$/);
 
-	# match slot/card info line
-	if (/^ *(\d+)\s+(\d+)\s+(.*)\s+(\S+)\s+(\S+)\s*$/) {
-	    $lines[$1 * 1000] .= "!Slot $1: type $3, $2 ports\n!Slot $1: part $4, serial $5\n";
-	    $lines[$1 * 1000] =~ s/\s+,/,/g;
-	    next;
-	}
-	# now match the Revs in the second paragraph of o/p and stick it in
-	# the array with the previous bits...grumble.
-	if (/^ *(\d+)\s+\S+\s+to\s+\S+\s+(\S+)\s+(\S*)\s+(\S+)(\s+\S+)?\s*$/) {
-	    $lines[$1 * 1000] .= "!Slot $1: hvers $2, firmware $3, sw $4\n";
-	    $lines[$1 * 1000] =~ s/\s+,/,/g;
-	    next;
-	}
-	# grab the sub-modules, if any
-	if (/^\s+(\d+)\s(.*)\s+(\S+)\s+(\S+)\s+(\S+)\s+\S+\s*$/) {
-	    my($idx);
-	    $pa = 0 if ($1 != $slot);
-	    $slot = $1;
-	    $idx = $1 * 1000 + $1 * 10 + $pa;
-	    $lines[$idx] .= "!Slot $1/$pa: type $2\n";
-	    $lines[$idx] .= "!Slot $slot/$pa: part $3, serial $4\n";
-	    $lines[$idx] .= "!Slot $slot/$pa: hvers $5\n";
-	    $pa++;
-	}
+	ProcessHistory("MODULE","","","!Module: $_");
     }
-    foreach $slot (@lines) {
-	next if ($slot =~ /^\s*$/);
-	ProcessHistory("Module","","","$slot!\n");
-    }
-
+    ProcessHistory("","","","!\n");
     return(0);
 }
 
@@ -496,36 +431,15 @@ sub PrintInterface {
 sub ShowIPInterface {
     print STDERR "    In ShowIPInterface: $_" if ($debug);
 
-    my $interface;
-
     while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if /Line has invalid autocommand /;
-	return(1) if /(Invalid input detected|Type help or )/;
-	#return(1) if ($type !~ /^(2900XL|3500XL|6000)$/);
-	return(-1) if (/command authorization failed/i);
-	next if (/^Configuration last modified by/);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-	if (/^([\w\/\.\-]+) is [\w\s]+, line protocol is [\w ]+/) {
-	    $interface = $1;
-	    next;
-	}
-	if (/^\s+Internet address is (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d+)/) {
-	    ProcessHistory("IP","ipsort",$1,"!IPv4 Address: $1 on $interface\n") if (defined $interface);
-	    next;
-	}
-	if (/^\s+Secondary address (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d+)/) {
-	    ProcessHistory("IP","ipsort",$1,"!IPv4 Address: $1 on $interface\n") if (defined $interface);
-	    next;
-	}
+        tr/\015//d;
+        next if /^\s*$/;
+        return(1) if /^Invalid input/;
+        last if (/^$prompt/);
+
+        ProcessHistory("IPInterface","","","!$_");
     }
+    ProcessHistory("IPInterface","","","!\n");
     return(0);
 }
 
@@ -533,50 +447,21 @@ sub ShowIPInterface {
 sub ShowIPv6Interface {
     print STDERR "    In ShowIPv6Interface: $_" if ($debug);
 
-    my $interface;
-
     while (<INPUT>) {
-	tr/\015//d;
-	last if (/^$prompt/);
-	next if (/^(\s*|\s*$cmd\s*)$/);
-	return(1) if /^\s*\^\s*$/;
-	return(1) if /Line has invalid autocommand /;
-	return(1) if /(Invalid input detected|Type help or )/;
-	#return(1) if ($type !~ /^(2900XL|3500XL|6000)$/);
-	return(-1) if (/command authorization failed/i);
-	next if (/^Configuration last modified by/);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
-	if (/^([\w\/\.\-]+) is [\w\s]+, line protocol is [\w ]+/) {
-	    $interface = {
-		name => $1,
-	    };
-	    next;
-	}
-	if (/^  ([\w ]+) address\(es\):/) {
-	    $interface->{'subsection'} = $1;
-	    next;
-	}
-	if (/^    ([0-9A-F:]+), subnet is [0-9A-F:]+\/(\d+)/) {
-	    ProcessHistory("IPv6","ipsort",$1,"!IPv6 Address: $1/$2 on $interface->{'name'}\n") if (defined $interface and $interface->{'subsection'} eq "Global unicast");
-	    next;
-	}
-	if (/^    ([0-9A-F:]+)/) {
-	    ProcessHistory("IPv6","ipsort",$1,"!IPv6 Address: $1 on $interface->{'name'}\n") if (defined $interface and $interface->{'subsection'} eq "Global unicast");
-	    next;
-	}
+        tr/\015//d;
+        next if /^\s*$/;
+        return(1) if /^Invalid input/;
+        last if (/^$prompt/);
+
+        ProcessHistory("IPv6Interface","","","!$_");
     }
+    ProcessHistory("IPv6Interface","","","!\n");
     return(0);
 }
 
 # This routine parses "show vlan"
 sub ShowVLAN {
     print STDERR "    In ShowVLAN: $_" if ($debug);
-
-    ($_ = <INPUT>, return(1)) if (!$DO_SHOW_VLAN);
 
     while (<INPUT>) {
 	tr/\015//d;
@@ -587,15 +472,15 @@ sub ShowVLAN {
 	return(1) if (/(Invalid (input|command) detected|Type help or )/i);
 	return(1) if (/Ambiguous command/i);
 	return(-1) if (/command authorization failed/i);
-	# the pager can not be disabled per-session on the PIX
-	if (/^(<-+ More -+>)/) {
-	    my($len) = length($1);
-	    s/^$1\s{$len}//;
-	}
+        # the pager can not be disabled per-session on the PIX
+        if (/^(<-+ More -+>)/) {
+            my($len) = length($1);
+            s/^$1\s{$len}//;
+        }
 
-	ProcessHistory("COMMENTS","keysort","IO","!VLAN: $_");
+	ProcessHistory("VLAN","","","!$_");
     }
-    ProcessHistory("COMMENTS","keysort","IO","!\n");
+    ProcessHistory("VLAN","","","!\n");
     return(0);
 }
 
@@ -608,7 +493,7 @@ sub ShowLACP {
     while (<INPUT>) {
         tr/\015//d;
         next if /^\s*$/;
-	last if /^Invalid input/;
+	return(1) if /^Invalid input/;
         last if (/^$prompt/);
 	# Remove counters
 	if ($_ =~ /^([0-9]+\/[0-9]+\s+[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}\s+)[0-9]+(\s+)[0-9]+(\s+[0-9]+\s+[0-9]+\s*)$/) {
@@ -647,7 +532,7 @@ sub ShowNTP {
     while (<INPUT>) {
         tr/\015//d;
         next if /^\s*$/;
-	last if /^Invalid input/;
+	return(1) if /^Invalid input/;
 	next if /^ reference time/;
 	next if /^ clock offset is/;
 	next if /^ root dispersion/;
