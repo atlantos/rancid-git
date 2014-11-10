@@ -549,6 +549,29 @@ sub ShowVersion {
     return(0);
 }
 
+# This routine parses "show interfaces"
+sub ShowInterfaces {
+    print STDERR "    In ShowInterfaces: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+	next if (/(Input|Output)\s+(rate|packets)\s*:\s+[0-9]/);
+	next if (/^\s+Output:\s+([0-9]+\s+){3}[0-9]+\s*$/);
+	s/(^\s*Last flapped\s*:\s+[^\(]+)(\(.*)/\1/;
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
 # This routine parses "show configuration"
 sub ShowConfiguration {
     my($lines) = 0;
@@ -679,6 +702,7 @@ sub DoNothing {print STDOUT;}
 #	{'show system autoinstallation status' => 'ShowSystemAutoinstall'},
 	{'show system license'		=> 'ShowSystemLicense'},
 #	{'show system license keys'	=> 'ShowSystemLicenseKeys'},
+	{'show interfaces'		=> 'ShowInterfaces'},
 	{'show system boot-messages'	=> 'ShowSystemBootMessages'},
 	{'show system core-dumps'	=> 'ShowSystemCoreDumps'},
 	{'show version detail'		=> 'ShowVersion'},
