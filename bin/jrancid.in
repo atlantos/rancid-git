@@ -572,6 +572,88 @@ sub ShowInterfaces {
     return(0);
 }
 
+# This routine parses "show interfaces diagnostics optics"
+sub ShowInterfacesDiagnosticsOptics {
+    print STDERR "    In ShowInterfacesDiagnosticsOptics: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+	next if (/^\s*(Laser bias current|Laser output power|Receiver signal average optical power|Module voltage|Module temperature)\s+:/);
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
+# This routine parses "show lacp interfaces"
+sub ShowLACPInterfaces {
+    print STDERR "    In ShowLACPInterfaces: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
+# This routine parses "show lldp neighbors"
+sub ShowLLDPNeighbors {
+    print STDERR "    In ShowLLDPNeighbors: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
+# This routine parses "show ntp status"
+sub ShowNTPStatus {
+    print STDERR "    In ShowNTPStatus: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+	next if (/^(reftime|clock|offset|precision)=/);
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
 # This routine parses "show configuration"
 sub ShowConfiguration {
     my($lines) = 0;
@@ -703,6 +785,10 @@ sub DoNothing {print STDOUT;}
 	{'show system license'		=> 'ShowSystemLicense'},
 #	{'show system license keys'	=> 'ShowSystemLicenseKeys'},
 	{'show interfaces'		=> 'ShowInterfaces'},
+	{'show interfaces diagnostics optics'		=> 'ShowInterfacesDiagnosticsOptics'},
+	{'show lacp interfaces'		=> 'ShowLACPInterfaces'},
+	{'show lldp neighbors'		=> 'ShowLLDPNeighbors'},
+	{'show ntp status'		=> 'ShowNTPStatus'},
 	{'show system boot-messages'	=> 'ShowSystemBootMessages'},
 	{'show system core-dumps'	=> 'ShowSystemCoreDumps'},
 	{'show version detail'		=> 'ShowVersion'},
