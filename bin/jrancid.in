@@ -562,7 +562,7 @@ sub ShowInterfaces {
 	next if (/^system (shutdown message from|going down )/i);
 	next if (/^\{(master|backup)(:\d+)?\}/);
 	next if (/(Input|Output)\s+(rate|packets)\s*:\s+[0-9]/);
-	next if (/^\s+Output:\s+([0-9]+\s+){3}[0-9]+\s*$/);
+	next if (/^\s+(Output|Input)\s*:\s+([0-9]+\s+){3}[0-9]+\s*$/);
 	s/(^\s*Last flapped\s*:\s+[^\(]+)(\(.*)/\1/;
 
 	ProcessHistory("","","","# $_");
@@ -646,6 +646,29 @@ sub ShowNTPStatus {
 	next if (/^system (shutdown message from|going down )/i);
 	next if (/^\{(master|backup)(:\d+)?\}/);
 	next if (/^(reftime|clock|offset|precision)=/);
+
+	ProcessHistory("","","","# $_");
+    }
+    ProcessHistory("","","","#\n");
+
+    return(0);
+}
+
+# This routine parses "show system processes"
+sub ShowSystemProcesses {
+    print STDERR "    In ShowSystemProcesses: $_" if ($debug);
+
+    s/^[a-z]+@//;
+    ProcessHistory("","","","# $_");
+    while (<INPUT>) {
+	tr/\015//d;
+	last if (/^$prompt/);
+	next if (/^\s*$/);
+	next if (/^system (shutdown message from|going down )/i);
+	next if (/^\{(master|backup)(:\d+)?\}/);
+	s/^\s*([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+([^\s].*)$/\5 \1/ if (/^\s*(PID|[0-9]+)\s+/);
+	next if (/^(sshd:|mgd:|\/bin\/ps|login)\s+/);
+	next if (/^\-?(cli|csh)\s+/);
 
 	ProcessHistory("","","","# $_");
     }
@@ -789,6 +812,7 @@ sub DoNothing {print STDOUT;}
 	{'show lacp interfaces'		=> 'ShowLACPInterfaces'},
 	{'show lldp neighbors'		=> 'ShowLLDPNeighbors'},
 	{'show ntp status'		=> 'ShowNTPStatus'},
+	{'show system processes'	=> 'ShowSystemProcesses'},
 	{'show system boot-messages'	=> 'ShowSystemBootMessages'},
 	{'show system core-dumps'	=> 'ShowSystemCoreDumps'},
 	{'show version detail'		=> 'ShowVersion'},
