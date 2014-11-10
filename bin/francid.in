@@ -292,6 +292,7 @@ sub ShowChassis {
         last if (/^$prompt/);
 	next if (/^(Active Mgmt Module|SFM[0-9]|LP[0-9]+ Sensor[0-9]+):\s+.*[0-9]C\s*$/);
 	next if (/Current temperature|Fan controlled temperature/);
+	s/[\[\]]//g if (/^Fan ok, speed/);
 
         ProcessHistory("CHASSIS","","","!$_");
     }
